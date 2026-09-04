@@ -1,0 +1,25 @@
+.rocketride/
+.env
+
+# Dependencies and build output (machine-generated)
+**/node_modules/
+**/dist/
+
+# Local browser profiles and QA output — these hold cookies and login data
+.edge-temp/
+qa-browser-profile/
+qa-artifacts/
+.pnpm-store/
+
+# Working notes and local tooling — the repo carries the app only
+.claude/
+.github/
+.vscode/
+HACKATHON_PLAN.md
+NIGHTLY_HANDOFF.md
+DEMO_SCRIPT.md
+*.pdf
+buildathon-page3.png
+claude.cmd
+pnpm.cmd
+apps/playbook-ui/pnpm.cmd

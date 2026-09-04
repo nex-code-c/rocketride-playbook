@@ -1,0 +1,48 @@
+{
+  "name": "local-playbook",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Playbook turns a recording of an expert shift into a reviewable, publishable training playbook.",
+  "license": "MIT",
+  "appManifest": {
+    "id": "prabhjeev_sohi.playbook",
+    "publisher": "local",
+    "name": "Playbook",
+    "description": "Turn your best shift into the standard for every shift.",
+    "icon": "./icon.svg",
+    "readme": "./README.md",
+    "categories": [
+      "custom"
+    ],
+    "mode": "free",
+    "authenticated": false,
+    "projectId": "83f7fbe7-3e64-4475-8bd4-b39e5ef65660"
+  },
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "tsc --noEmit && rsbuild build",
+    "typecheck": "tsc --noEmit",
+    "check:setup": "tsx check.ts",
+    "release:staging": "tsx release.ts",
+    "submit:review": "tsx submit-review.ts"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "qrcode": "^1.5.4",
+    "rocketride": "file:../../.rocketride/client/rocketride.tgz",
+    "shell": "file:../../.rocketride/shell/shell.tgz"
+  },
+  "devDependencies": {
+    "@module-federation/rsbuild-plugin": "2.5.1",
+    "@rsbuild/core": "~2.0.11",
+    "@rsbuild/plugin-react": "~2.0.1",
+    "@types/node": "^20.19.41",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/qrcode": "^1.5.5",
+    "react-refresh": "^0.14.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.3.0"
+  }
+}

@@ -1,0 +1,46 @@
+const pages = await (await fetch('http://localhost:9223/json')).json();
+const page = pages.find((item) => item.url === 'http://localhost:3453/');
+if (!page) throw new Error('QA page not found');
+const ws = new WebSocket(page.webSocketDebuggerUrl);
+await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
+let id = 0;
+const pending = new Map();
+ws.onmessage = (event) => { const msg = JSON.parse(event.data); if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); } };
+const send = (method, params = {}) => new Promise((resolve) => { const next = ++id; pending.set(next, resolve); ws.send(JSON.stringify({ id: next, method, params })); });
+const evaluate = async (expression) => {
+  const response = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+  if (response.result?.exceptionDetails) throw new Error(response.result.exceptionDetails.text);
+  return response.result?.result?.value;
+};
+const wait = (ms = 150) => new Promise((resolve) => setTimeout(resolve, ms));
+const click = async (text) => {
+  const found = await evaluate(`(()=>{const e=[...document.querySelectorAll('button')].find(x=>x.textContent.trim().includes(${JSON.stringify(text)}));if(!e)return false;e.click();return true})()`);
+  if (!found) throw new Error(`Button not found: ${text}`);
+  await wait();
+};
+const assert = (value, message) => { if (!value) throw new Error(message); console.log(`PASS ${message}`); };
+await evaluate(`localStorage.clear(); location.reload()`); await wait(700);
+assert(await evaluate(`document.body.innerText.includes('Create playbook') && !document.body.innerText.includes('Create location')`), 'playbook creation stays focused on the active location');
+await click('Create playbook');
+assert(await evaluate(`document.querySelectorAll('.source-upload-grid .upload').length===2 && !document.querySelector('.location-template-card')`), 'single-playbook modal contains only media workflows');
+await evaluate(`document.querySelector('[aria-label="Close create playbook"]').click()`); await wait();
+await click('Settings');
+assert(await evaluate(`document.body.innerText.includes('Add location')`), 'location management lives in Settings');
+await click('Add location');
+assert(await evaluate(`document.querySelector('#create-location-title')?.textContent.includes('complete location')`), 'location modal opens');
+await evaluate(`(()=>{const e=document.querySelector('.location-name-field input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'QA Harbor');e.dispatchEvent(new Event('input',{bubbles:true}));})()`); await wait();
+await click('Create location'); await wait(300);
+assert(await evaluate(`document.body.innerText.includes('QA Harbor')`), 'named location is created and activated');
+assert(await evaluate(`/open/i.test(document.body.innerText) && /clos/i.test(document.body.innerText) && /clean/i.test(document.body.innerText)`), 'location contains opening, closing, and cleaning playbooks');
+for (const section of ['Playbooks','Team','Tasks','Goals','Home']) { await click(section); assert(await evaluate(`document.body.innerText.includes(${JSON.stringify(section === 'Tasks' ? 'Shift checklists' : section === 'Team' ? 'Team training' : section === 'Goals' ? 'Location goals' : section === 'Home' ? 'Your playbooks' : section)})`), `${section} navigation renders`); }
+await click('Team'); await evaluate(`document.querySelector('.member-button').click()`); await wait(); assert(await evaluate(`document.body.innerText.includes('Tasks accomplished')`), 'team member accomplishment detail opens'); await evaluate(`document.querySelector('[aria-label="Close team member details"]').click()`); await wait();
+await click('Goals'); await evaluate(`(()=>{const e=document.querySelector('.goal-form input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'Pass QA opening audit');e.dispatchEvent(new Event('input',{bubbles:true}));})()`); await wait(); await click('Add goal'); assert(await evaluate(`document.body.innerText.includes('Pass QA opening audit')`), 'location goal can be created');
+await click('Tasks'); await click('Closing'); assert(await evaluate(`document.body.innerText.includes('Closing checklist')`), 'closing checklist switches independently');
+await evaluate(`document.querySelector('.checkcard input[type="checkbox"]').click()`); await click('Opening'); await click('Closing'); assert(await evaluate(`document.querySelector('.checkcard input[type="checkbox"]').checked`), 'closing checklist progress persists across tabs');
+await click('Playbooks'); await click('Daily Cleaning Checklist'); assert(await evaluate(`document.body.innerText.includes('CLEANING PLAYBOOK') && document.body.innerText.includes('Responsible role')`), 'cleaning playbook uses dedicated review type');
+const overlap = await evaluate(`(()=>{const m=document.querySelector('.draft-review');m.scrollTop=m.scrollHeight;const f=document.querySelector('.review-actions').getBoundingClientRect();const fields=[...document.querySelectorAll('.review-grid textarea')].map(x=>x.getBoundingClientRect());return fields.some(r=>r.bottom>f.top&&r.top<f.bottom)})()`);
+assert(!overlap, 'review actions do not cover form fields');
+await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true}); await wait(250);
+console.log(await evaluate(`JSON.stringify({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth,wide:[...document.querySelectorAll('*')].filter(e=>e.getBoundingClientRect().right>document.documentElement.clientWidth+1).slice(0,8).map(e=>({tag:e.tagName,cls:e.className,right:e.getBoundingClientRect().right,width:e.getBoundingClientRect().width}))})`));
+assert(await evaluate(`document.documentElement.scrollWidth <= document.documentElement.clientWidth`), 'mobile viewport has no horizontal overflow');
+ws.close();

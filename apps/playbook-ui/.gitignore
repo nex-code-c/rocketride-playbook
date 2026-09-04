@@ -1,0 +1,12 @@
+node_modules/
+dist/
+qa-browser.mjs
+qa-handoff.mjs
+qa-*.png
+acceptance-image.ts
+handwritten-jasmine-batch.png
+src/assets/playbook-covers.png
+acceptance-image.ts
+handwritten-jasmine-batch.png
+_*.mts
+_*.mjs
