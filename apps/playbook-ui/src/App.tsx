@@ -578,20 +578,27 @@ const normalizeDraft = (result: unknown, sourceFile: string): GeneratedDraft => 
   };
 };
 
+// Some containers and codecs fire neither loadedmetadata nor error in a given
+// browser — a phone recording is a common case. Waiting forever left the app
+// looking dead, so an unreadable duration resolves to NaN and the caller skips
+// the length check rather than blocking a legitimate upload. The size cap
+// still bounds what reaches the pipeline.
 const readVideoDuration = (file: File) =>
-  new Promise<number>((resolve, reject) => {
+  new Promise<number>((resolve) => {
     const video = document.createElement("video");
     const url = URL.createObjectURL(file);
-    video.preload = "metadata";
-    video.onloadedmetadata = () => {
-      const duration = video.duration;
+    let settled = false;
+    const finish = (duration: number) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
       URL.revokeObjectURL(url);
       resolve(duration);
     };
-    video.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("We could not read this video's duration."));
-    };
+    const timer = window.setTimeout(() => finish(Number.NaN), 8000);
+    video.preload = "metadata";
+    video.onloadedmetadata = () => finish(video.duration);
+    video.onerror = () => finish(Number.NaN);
     video.src = url;
   });
 
@@ -1235,16 +1242,19 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
       setProcessing(true);
       return;
     }
+    // Say something the moment a file is chosen. Reading the duration can take
+    // seconds, and showing nothing made a working app look frozen.
+    setModal(false);
+    setProcessing(true);
+    setProcessingState({ phase: "uploading", progress: 4, title: `Checking ${file.name}…`, detail: "Reading the recording before any processing starts" });
     try {
       const duration = await readVideoDuration(file);
-      if (!Number.isFinite(duration) || duration <= 0 || duration > MAX_VIDEO_SECONDS) {
+      if (Number.isFinite(duration) && (duration <= 0 || duration > MAX_VIDEO_SECONDS)) {
         throw new Error("Choose a video between 1 second and 5 minutes long.");
       }
       if (!isConnected || !identity?.userToken) {
         throw new Error("Connect and sign in to RocketRide staging before processing a video.");
       }
-      setModal(false);
-      setProcessing(true);
       setProcessingState({ phase: "uploading", progress: 8, title: `Uploading ${file.name}…`, detail: "Preparing a secure RocketRide run" });
       const client = new RocketRideClient({
         auth: identity.userToken,
