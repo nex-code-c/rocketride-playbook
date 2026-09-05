@@ -518,6 +518,25 @@ const findRecordWithRecipeFields = (value: unknown): Record<string, unknown> | n
 // A RocketRide run can resolve with an error payload instead of rejecting —
 // an unresolved provider key comes back this way. Treat that as a failure
 // rather than letting an empty draft reach the owner as a review screen.
+// Raw platform errors are accurate but tell an owner nothing about what to
+// do. Say what happened and what to try, and never imply their file is at
+// fault when it isn't.
+const explainRunFailure = (message: string): string => {
+  if (/already running/i.test(message)) {
+    return "A previous run is still finishing on RocketRide, so this one could not start. Nothing is wrong with your recording — wait a minute and press Retry.";
+  }
+  if (/an error occurred with the api|invalid api key/i.test(message)) {
+    return "RocketRide's model provider rejected the request. This one usually clears on its own — press Retry.";
+  }
+  if (/timed out|timeout/i.test(message)) {
+    return "The run took longer than the app waited. Try a shorter clip, or press Retry on a stronger connection.";
+  }
+  if (/connection closed|websocket|network|ENOTFOUND/i.test(message)) {
+    return "The connection to RocketRide dropped mid-run. Check your network and press Retry.";
+  }
+  return message;
+};
+
 const pipelineErrorMessage = (result: unknown): string => {
   const seen = new Set<object>();
   const walk = (value: unknown): string => {
@@ -1276,7 +1295,10 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
       const client = new RocketRideClient({
         auth: identity.userToken,
         uri: "https://staging.rocketride.ai",
-        requestTimeout: 180_000,
+        // Uploading a phone recording and transcribing it takes far longer
+        // than reading a photo, and the app accepts clips up to five minutes.
+        // Three minutes was short enough to fail a run that was still working.
+        requestTimeout: 8 * 60 * 1000,
       });
       activeClient.current = client;
       await client.connect();
@@ -1318,7 +1340,7 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
       const message = error instanceof Error ? error.message : "The RocketRide run failed.";
       setModal(false);
       setProcessing(true);
-      setProcessingState({ phase: "error", progress: 0, title: "Could not create the draft", detail: message });
+      setProcessingState({ phase: "error", progress: 0, title: "Could not create the draft", detail: explainRunFailure(message) });
       recordRunMetric("video", "error", startedAt);
     } finally {
       const client = activeClient.current;
@@ -1391,7 +1413,7 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
       setReviewOpen(true);
       recordRunMetric("image", "success", startedAt);
     } catch (error) {
-      setProcessingState({ phase: "error", progress: 0, title: "Could not analyze the instructions", detail: error instanceof Error ? error.message : "The RocketRide run failed." });
+      setProcessingState({ phase: "error", progress: 0, title: "Could not analyze the instructions", detail: explainRunFailure(error instanceof Error ? error.message : "The RocketRide run failed.") });
       setModal(false);
       setProcessing(true);
       recordRunMetric("image", "error", startedAt);
