@@ -1714,8 +1714,14 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
     setSelectedMember(updated);
   };
   const deleteActiveDraft = () => {
-    if (!activeRecordId || draftStatus !== "draft") return;
-    if (!window.confirm("Delete this draft? Published playbooks and completion history will not be affected.")) return;
+    if (!activeRecordId) return;
+    // A shop will publish something wrong and need it gone. Removing it from
+    // the library does not erase what people already did, and a printed QR
+    // keeps opening because the playbook travels inside the link.
+    const message = draftStatus === "published"
+      ? "Delete this published playbook? It is removed from your library. Completion records are kept, and workstation QR codes you have already printed keep working."
+      : "Delete this draft? Published playbooks and completion history will not be affected.";
+    if (!window.confirm(message)) return;
     const nextRecords = playbookRecords.filter((record) => record.id !== activeRecordId);
     setPlaybookRecords(nextRecords);
     setActiveRecordId(null);
@@ -2835,7 +2841,7 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
             </div>
             {reviewError && <p className="review-error" role="alert">{reviewError}</p>}
             <footer className="review-actions">
-              {draftStatus === "draft" && activeRecordId && <button className="danger-button" onClick={deleteActiveDraft}>Delete draft</button>}
+              {activeRecordId && <button className="danger-button" onClick={deleteActiveDraft}>{draftStatus === "published" ? "Delete playbook" : "Delete draft"}</button>}
               <button className="secondary" onClick={() => saveDraft(false)}>Save draft</button>
               <button className="primary" onClick={() => saveDraft(true)}>Approve &amp; publish</button>
             </footer>
