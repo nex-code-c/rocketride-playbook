@@ -129,7 +129,7 @@
     "custom": {
      "apikey": "${ROCKETRIDE_GROQ_KEY}",
      "base_url": "https://api.groq.com/openai/v1",
-     "model": "qwen/qwen3.6-27b",
+     "model": "qwen/qwen3.8-27b",
      "modelTotalTokens": 131072
     },
     "parameters": {}

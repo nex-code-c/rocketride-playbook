@@ -1,162 +1,162 @@
 {
-  "components": [
-    {
-      "id": "webhook_1",
-      "provider": "webhook",
-      "config": {
-        "hideForm": true,
-        "mode": "Source",
-        "parameters": {},
-        "type": "webhook"
-      },
-      "ui": {
-        "position": {
-          "x": 20,
-          "y": 180
-        },
-        "nodeType": "default",
-        "formDataValid": true
-      }
+ "components": [
+  {
+   "id": "webhook_1",
+   "provider": "webhook",
+   "config": {
+    "hideForm": true,
+    "mode": "Source",
+    "parameters": {},
+    "type": "webhook"
+   },
+   "ui": {
+    "position": {
+     "x": 20,
+     "y": 180
     },
-    {
-      "id": "ocr_1",
-      "provider": "ocr",
-      "config": {
-        "parameters": {}
-      },
-      "input": [
-        {
-          "lane": "image",
-          "from": "webhook_1"
-        }
-      ],
-      "ui": {
-        "position": {
-          "x": 250,
-          "y": 180
-        },
-        "nodeType": "default",
-        "formDataValid": true
-      }
-    },
-    {
-      "id": "extract_data_1",
-      "provider": "extract_data",
-      "config": {
-        "profile": "default",
-        "default": {
-          "fields": [
-            {
-              "column": "playbook_title",
-              "type": "text"
-            },
-            {
-              "column": "station",
-              "type": "text"
-            },
-            {
-              "column": "steps_json",
-              "type": "json"
-            },
-            {
-              "column": "ingredients_json",
-              "type": "json"
-            },
-            {
-              "column": "timers_json",
-              "type": "json"
-            },
-            {
-              "column": "safety_checks_json",
-              "type": "json"
-            },
-            {
-              "column": "quality_cues_json",
-              "type": "json"
-            },
-            {
-              "column": "evidence_json",
-              "type": "json"
-            },
-            {
-              "column": "confidence_json",
-              "type": "json"
-            }
-          ]
-        },
-        "parameters": {}
-      },
-      "input": [
-        {
-          "lane": "text",
-          "from": "ocr_1"
-        }
-      ],
-      "ui": {
-        "position": {
-          "x": 480,
-          "y": 180
-        },
-        "nodeType": "default",
-        "formDataValid": true
-      }
-    },
-    {
-      "id": "llm_groq_1",
-      "provider": "llm_openai_api",
-      "config": {
-        "profile": "custom",
-        "custom": {
-          "apikey": "${ROCKETRIDE_GROQ_KEY}",
-          "base_url": "https://api.groq.com/openai/v1",
-          "model": "qwen/qwen3.6-27b",
-          "modelTotalTokens": 131072
-        },
-        "parameters": {}
-      },
-      "control": [
-        {
-          "classType": "llm",
-          "from": "extract_data_1"
-        }
-      ],
-      "ui": {
-        "position": {
-          "x": 480,
-          "y": 320
-        },
-        "nodeType": "default",
-        "formDataValid": true
-      }
-    },
-    {
-      "id": "response_answers_1",
-      "provider": "response_answers",
-      "config": {
-        "laneName": "playbook"
-      },
-      "input": [
-        {
-          "lane": "answers",
-          "from": "extract_data_1"
-        }
-      ],
-      "ui": {
-        "position": {
-          "x": 710,
-          "y": 180
-        },
-        "nodeType": "default",
-        "formDataValid": true
-      }
-    }
-  ],
-  "source": "webhook_1",
-  "project_id": "d45613f6-77cd-4a4c-a79a-0137231a9453",
-  "viewport": {
-    "x": 0,
-    "y": 0,
-    "zoom": 1
+    "nodeType": "default",
+    "formDataValid": true
+   }
   },
-  "version": 1
+  {
+   "id": "ocr_1",
+   "provider": "ocr",
+   "config": {
+    "parameters": {}
+   },
+   "input": [
+    {
+     "lane": "image",
+     "from": "webhook_1"
+    }
+   ],
+   "ui": {
+    "position": {
+     "x": 250,
+     "y": 180
+    },
+    "nodeType": "default",
+    "formDataValid": true
+   }
+  },
+  {
+   "id": "extract_data_1",
+   "provider": "extract_data",
+   "config": {
+    "profile": "default",
+    "default": {
+     "fields": [
+      {
+       "column": "playbook_title",
+       "type": "text"
+      },
+      {
+       "column": "station",
+       "type": "text"
+      },
+      {
+       "column": "steps_json",
+       "type": "json"
+      },
+      {
+       "column": "ingredients_json",
+       "type": "json"
+      },
+      {
+       "column": "timers_json",
+       "type": "json"
+      },
+      {
+       "column": "safety_checks_json",
+       "type": "json"
+      },
+      {
+       "column": "quality_cues_json",
+       "type": "json"
+      },
+      {
+       "column": "evidence_json",
+       "type": "json"
+      },
+      {
+       "column": "confidence_json",
+       "type": "json"
+      }
+     ]
+    },
+    "parameters": {}
+   },
+   "input": [
+    {
+     "lane": "text",
+     "from": "ocr_1"
+    }
+   ],
+   "ui": {
+    "position": {
+     "x": 480,
+     "y": 180
+    },
+    "nodeType": "default",
+    "formDataValid": true
+   }
+  },
+  {
+   "id": "llm_groq_1",
+   "provider": "llm_openai_api",
+   "config": {
+    "profile": "custom",
+    "custom": {
+     "apikey": "${ROCKETRIDE_GROQ_KEY}",
+     "base_url": "https://api.groq.com/openai/v1",
+     "model": "qwen/qwen3.8-27b",
+     "modelTotalTokens": 131072
+    },
+    "parameters": {}
+   },
+   "control": [
+    {
+     "classType": "llm",
+     "from": "extract_data_1"
+    }
+   ],
+   "ui": {
+    "position": {
+     "x": 480,
+     "y": 320
+    },
+    "nodeType": "default",
+    "formDataValid": true
+   }
+  },
+  {
+   "id": "response_answers_1",
+   "provider": "response_answers",
+   "config": {
+    "laneName": "playbook"
+   },
+   "input": [
+    {
+     "lane": "answers",
+     "from": "extract_data_1"
+    }
+   ],
+   "ui": {
+    "position": {
+     "x": 710,
+     "y": 180
+    },
+    "nodeType": "default",
+    "formDataValid": true
+   }
+  }
+ ],
+ "source": "webhook_1",
+ "project_id": "d45613f6-77cd-4a4c-a79a-0137231a9453",
+ "viewport": {
+  "x": 0,
+  "y": 0,
+  "zoom": 1
+ },
+ "version": 1
 }

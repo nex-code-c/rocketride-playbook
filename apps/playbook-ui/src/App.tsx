@@ -827,9 +827,12 @@ const CONFIDENCE_LABELS: Record<string, string> = {
 
 const lowConfidenceWarning = (value: unknown): string[] => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  // Models name these fields with and without the _json suffix, so match both
+  // rather than silently dropping every score.
+  const label = (field: string) => CONFIDENCE_LABELS[field] ?? CONFIDENCE_LABELS[`${field}_json`];
   const weak = Object.entries(value as Record<string, unknown>)
-    .filter(([field, score]) => typeof score === "number" && score < 0.9 && CONFIDENCE_LABELS[field])
-    .map(([field]) => CONFIDENCE_LABELS[field]);
+    .filter(([field, score]) => typeof score === "number" && score < 0.9 && label(field))
+    .map(([field]) => label(field));
   if (!weak.length) return [];
   return [`RocketRide was less certain about ${weak.join(", ")}. Check these against the source before publishing.`];
 };
