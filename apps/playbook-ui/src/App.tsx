@@ -1942,13 +1942,6 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
         {playbookQuery && !allPlaybooks.some(queryMatches) && (
           <p className="empty-search">No playbooks match “{playbookQuery}”.</p>
         )}
-        <button className="new" onClick={() => setModal(true)}>
-          <i>
-            <Icon name="plus" />
-          </i>
-          <b>Create a playbook</b>
-          <span>Upload a video or record a process</span>
-        </button>
       </section>
       <section className="activity">
         <div>
