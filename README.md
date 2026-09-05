@@ -4,7 +4,9 @@
 
 Playbook takes a recording of an experienced kitchen employee — or a photo of the handwritten recipe card taped inside the cupboard — and turns it into a structured training playbook with measurements, portion scaling, timers, safety checks, and workstation QR access.
 
-Built for the owner or operations manager of a 1–5 location boba shop, where training happens from memory and every shift makes the drink a little differently.
+Built for owners and operations managers of restaurants and fast-food locations — anywhere training happens from memory and every shift does it a little differently.
+
+It ships starter templates across ten cuisines (Italian, Mexican, Indian, Japanese, Mediterranean, Chinese, Thai, Korean, Vietnamese, American) alongside a boba café, so a new location starts from a real structure rather than a blank page.
 
 Built on [RocketRide](https://rocketride.ai) for the SCU Buildathon.
 

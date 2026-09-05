@@ -2,7 +2,7 @@
 
 Playbook turns a recording of an experienced kitchen employee into a structured, reviewable training playbook with measurements, portion scaling, timers, safety checks, and workstation QR access.
 
-The product targets the owner or operations manager of a 1–5 location boba shop, where training happens from memory and every shift makes the drink differently.
+The product targets the owner or operations manager of a restaurant or fast-food location, where training happens from memory and every shift does it differently. Starter templates cover ten cuisines as well as a boba café.
 
 ## Why this exists: the confident wrong answer
 
