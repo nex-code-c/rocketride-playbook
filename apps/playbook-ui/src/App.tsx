@@ -909,6 +909,7 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
     [qrDataUrl, setQrDataUrl] = useState(""),
     [qrLinkUrl, setQrLinkUrl] = useState(""),
     [qrCopied, setQrCopied] = useState(false),
+    qrLinkRef = useRef<HTMLInputElement>(null),
     [inviteOpen, setInviteOpen] = useState(false),
     [profileOpen, setProfileOpen] = useState(false),
     [selectedMember, setSelectedMember] = useState<TeamMember | null>(null),
@@ -2935,13 +2936,30 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
             ) : (
               <div className="qr-loading">Generating secure QR…</div>
             )}
+            {qrLinkUrl && (
+              <label className="qr-link">
+                <span>Or send this link — the playbook travels inside it</span>
+                <input
+                  ref={qrLinkRef}
+                  readOnly
+                  value={qrLinkUrl}
+                  aria-label="Workstation link"
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+              </label>
+            )}
             <div className="qr-actions">
               <button
                 className="secondary"
                 disabled={!qrLinkUrl}
                 onClick={() => {
                   if (!qrLinkUrl) return;
-                  void navigator.clipboard.writeText(qrLinkUrl)
+                  // Always select the field first: clipboard access is refused
+                  // in plenty of contexts, and a button that silently does
+                  // nothing is worse than one that hands you the text.
+                  qrLinkRef.current?.focus();
+                  qrLinkRef.current?.select();
+                  void Promise.resolve(navigator.clipboard?.writeText(qrLinkUrl))
                     .then(() => setQrCopied(true))
                     .catch(() => setQrCopied(false));
                 }}

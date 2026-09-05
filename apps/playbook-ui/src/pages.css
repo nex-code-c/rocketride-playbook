@@ -1582,3 +1582,31 @@ body,
   justify-content: center;
 }
 .qr-actions > button:disabled { cursor: not-allowed; opacity: .5; }
+
+/* The workstation link is shown, not just copied — clipboard access is
+   refused in many contexts and a button that silently fails is worse. */
+.qr-link {
+  display: block;
+  margin-top: 14px;
+  text-align: left;
+}
+.qr-link > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.qr-link input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7faf7;
+  color: #45524b;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
