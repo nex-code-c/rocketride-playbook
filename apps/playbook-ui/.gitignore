@@ -10,3 +10,4 @@ acceptance-image.ts
 handwritten-jasmine-batch.png
 _*.mts
 _*.mjs
+acceptance-video.ts

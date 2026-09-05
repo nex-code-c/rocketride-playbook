@@ -24,7 +24,9 @@
     "typecheck": "tsc --noEmit",
     "check:setup": "tsx check.ts",
     "release:staging": "tsx release.ts",
-    "submit:review": "tsx submit-review.ts"
+    "submit:review": "tsx submit-review.ts",
+    "acceptance:video": "tsx acceptance-video.ts",
+    "acceptance:image": "tsx acceptance-image.ts"
   },
   "dependencies": {
     "react": "^18.2.0",
