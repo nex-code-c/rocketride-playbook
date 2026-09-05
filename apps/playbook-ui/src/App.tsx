@@ -672,10 +672,23 @@ const APP_ID = "prabhjeev_sohi.playbook";
 // bound; a measurement naming a vessel ("a 500 ml serving cup") is equipment,
 // not an amount; and owners write "cups" and "grams" as often as "g".
 const SCALE_UNITS = "kg|g|grams?|mg|ml|millilit(?:re|er)s?|l|lit(?:re|er)s?|oz|ounces?|lbs?|pounds?|cups?|tbsp|tablespoons?|tsp|teaspoons?|pieces?|pcs";
+// Spoken recipes are full of fractions. Without this, "1/2 cup" matched only
+// the 2 and doubling produced "1/4 cup" — half the amount, stated confidently.
+const SCALE_VALUE = "\\d[\\d,]*(?:\\.\\d+)?(?:\\s+\\d+/\\d+)?|\\d+/\\d+";
 const SCALE_PATTERN = new RegExp(
-  `(?:(\\d[\\d,]*(?:\\.\\d+)?)\\s*(?:-|–|—|to)\\s*)?(\\d[\\d,]*(?:\\.\\d+)?)\\s*(${SCALE_UNITS})\\b`,
+  `(?:((?:${SCALE_VALUE}))\\s*(?:-|–|—|to)\\s*)?((?:${SCALE_VALUE}))\\s*(${SCALE_UNITS})\\b`,
   "gi",
 );
+
+const parseAmount = (raw: string) => {
+  const value = String(raw).replace(/,/g, "").trim();
+  const mixed = value.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+  if (mixed) return Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]);
+  const fraction = value.match(/^(\d+)\/(\d+)$/);
+  if (fraction) return Number(fraction[1]) / Number(fraction[2]);
+  const plain = Number(value);
+  return Number.isFinite(plain) ? plain : Number.NaN;
+};
 const VESSEL_FOLLOWS = /^[\s-]*(?:[a-z]+\s+){0,2}(?:cup|cups|jug|pitcher|pan|pot|container|bottle|tin|shaker|measure|scoop|bowl|tray|mold|mould|cooker|strainer)\b/i;
 
 // Timers, evidence and confidence come back as independent lists, not one
@@ -802,17 +815,21 @@ const lowConfidenceWarning = (value: unknown): string[] => {
   return [`RocketRide was less certain about ${weak.join(", ")}. Check these against the source before publishing.`];
 };
 
-const scaleMeasurements = (text: string, servings: number) =>
-  text.replace(SCALE_PATTERN, (match, low: string | undefined, high: string, unit: string, offset: number) => {
+const scaleMeasurements = (text: string, servings: number) => {
+  // At one batch the owner's own wording is the right wording — rewriting
+  // "1/2 cup" as "0.5 cup" helps nobody.
+  if (servings === 1) return text;
+  return text.replace(SCALE_PATTERN, (match, low: string | undefined, high: string, unit: string, offset: number) => {
     if (VESSEL_FOLLOWS.test(text.slice(offset + match.length))) return match;
-    const amount = Number(String(high).replace(/,/g, ""));
+    const amount = parseAmount(high);
     if (!Number.isFinite(amount)) return match;
-    const format = (value: number) => (Math.round(value * servings * 10) / 10).toLocaleString("en-US");
+    const format = (value: number) => (Math.round(value * servings * 100) / 100).toLocaleString("en-US");
     if (low === undefined) return `${format(amount)} ${unit}`;
-    const lowAmount = Number(String(low).replace(/,/g, ""));
+    const lowAmount = parseAmount(low);
     if (!Number.isFinite(lowAmount)) return match;
     return `${format(lowAmount)}-${format(amount)} ${unit}`;
   });
+};
 
 const withStagingStore = async <T,>(userToken: string, action: (client: RocketRideClient) => Promise<T>) => {
   const client = new RocketRideClient({
@@ -1280,7 +1297,7 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
         file.type,
         async (type) => {
           const progress = type.includes("answer") ? 88 : type.includes("text") ? 68 : 42;
-          setProcessingState({ phase: "analyzing", progress, title: `Analyzing ${file.name}…`, detail: type.includes("answer") ? "Structuring the review draft" : "Extracting scenes, speech, measurements, and safety checks" });
+          setProcessingState({ phase: "analyzing", progress, title: `Analyzing ${file.name}…`, detail: type.includes("answer") ? "Structuring the review draft" : "Transcribing the narration and pulling out measurements" });
         },
       );
       if (!result) throw new Error("RocketRide finished without returning a draft.");
@@ -1288,7 +1305,7 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
       if (runError) throw new Error(`RocketRide could not process this video: ${runError}`);
       const draft = { ...normalizeDraft(result, file.name), kind: createKind || normalizeDraft(result, file.name).kind };
       if (!draft.steps.length && !draft.ingredients.length) {
-        throw new Error("No steps or measurements were recovered from this video. The pipeline reads speech and on-screen text, so reshoot with the process narrated out loud.");
+        throw new Error("No steps or measurements were recovered from this video. Playbook listens to the narration, so reshoot with the process talked through out loud.");
       }
       activateNewDraft(draft);
       localStorage.setItem("playbook-latest-pipeline-result", JSON.stringify({ fileName: file.name, createdAt: new Date().toISOString(), result }));
