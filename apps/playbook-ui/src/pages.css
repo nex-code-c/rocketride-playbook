@@ -1570,3 +1570,15 @@ body,
 }
 .checkcard label b { font-size: max(13px, .82rem); }
 .checkcard label small { font-size: max(10px, .65rem); }
+
+/* The workstation code is shared as often as it is printed. */
+.qr-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+.qr-actions > button {
+  flex: 1;
+  justify-content: center;
+}
+.qr-actions > button:disabled { cursor: not-allowed; opacity: .5; }

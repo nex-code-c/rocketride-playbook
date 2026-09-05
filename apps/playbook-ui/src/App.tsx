@@ -474,6 +474,9 @@ const asText = (item: unknown): string => {
   return parts.join(" — ");
 };
 
+const asTypedLines = (value: string): string[] =>
+  value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+
 const asList = (value: unknown): string[] => {
   if (Array.isArray(value)) {
     return value.map(asText).filter(Boolean);
@@ -904,6 +907,8 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
     [statusFilter, setStatusFilter] = useState("All statuses"),
     [qrOpen, setQrOpen] = useState(false),
     [qrDataUrl, setQrDataUrl] = useState(""),
+    [qrLinkUrl, setQrLinkUrl] = useState(""),
+    [qrCopied, setQrCopied] = useState(false),
     [inviteOpen, setInviteOpen] = useState(false),
     [profileOpen, setProfileOpen] = useState(false),
     [selectedMember, setSelectedMember] = useState<TeamMember | null>(null),
@@ -1115,6 +1120,8 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
         params.set("source", activeRecord.shareUrl);
       }
       const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+      setQrLinkUrl(url);
+      setQrCopied(false);
       await QRCode.toDataURL(url, {
       width: 320,
       margin: 2,
@@ -2771,31 +2778,31 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
               </label>
               <label>
                 <span>{currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "Ingredients and exact amounts" : "Required supplies and equipment"}</span>
-                <textarea value={generatedDraft.ingredients.join("\n")} onChange={(event) => updateDraft({ ingredients: asList(event.target.value) })} placeholder={currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "30 ml brown sugar syrup" : "Calibrated thermometer"} />
+                <textarea value={generatedDraft.ingredients.join("\n")} onChange={(event) => updateDraft({ ingredients: asTypedLines(event.target.value) })} placeholder={currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "30 ml brown sugar syrup" : "Calibrated thermometer"} />
               </label>
               <label>
                 <span>{currentPlaybookKind === "opening" || currentPlaybookKind === "closing" || currentPlaybookKind === "cleaning" ? "Checklist items in order" : currentPlaybookKind === "task" ? "Task steps in order" : "Ordered preparation steps"}</span>
-                <textarea value={generatedDraft.steps.join("\n")} onChange={(event) => updateDraft({ steps: asList(event.target.value) })} placeholder={currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "Portion 60 g cooked pearls" : "Record refrigeration temperatures"} />
+                <textarea value={generatedDraft.steps.join("\n")} onChange={(event) => updateDraft({ steps: asTypedLines(event.target.value) })} placeholder={currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "Portion 60 g cooked pearls" : "Record refrigeration temperatures"} />
               </label>
               <label>
                 <span>{currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "Timers" : "Schedule and due window"}</span>
-                <textarea value={generatedDraft.timers.join("\n")} onChange={(event) => updateDraft({ timers: asList(event.target.value) })} placeholder={currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "Shake for 10 seconds" : "Complete before doors open"} />
+                <textarea value={generatedDraft.timers.join("\n")} onChange={(event) => updateDraft({ timers: asTypedLines(event.target.value) })} placeholder={currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "Shake for 10 seconds" : "Complete before doors open"} />
               </label>
               <label>
                 <span>Safety checks</span>
-                <textarea value={generatedDraft.safetyChecks.join("\n")} onChange={(event) => updateDraft({ safetyChecks: asList(event.target.value) })} placeholder="Keep milk at 41°F / 5°C or below" />
+                <textarea value={generatedDraft.safetyChecks.join("\n")} onChange={(event) => updateDraft({ safetyChecks: asTypedLines(event.target.value) })} placeholder="Keep milk at 41°F / 5°C or below" />
               </label>
               <label className="review-wide">
                 <span>{currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "Quality cues" : "Completion and sign-off standard"}</span>
-                <textarea value={generatedDraft.qualityCues.join("\n")} onChange={(event) => updateDraft({ qualityCues: asList(event.target.value) })} placeholder={currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "Tea is evenly mixed with no syrup streaks" : "Station is stocked, logged, and ready"} />
+                <textarea value={generatedDraft.qualityCues.join("\n")} onChange={(event) => updateDraft({ qualityCues: asTypedLines(event.target.value) })} placeholder={currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "Tea is evenly mixed with no syrup streaks" : "Station is stocked, logged, and ready"} />
               </label>
               <label>
                 <span>Step evidence (one line per step)</span>
-                <textarea value={(generatedDraft.evidence || []).join("\n")} onChange={(event) => updateDraft({ evidence: asList(event.target.value) })} placeholder="00:42 · Worker adds 60 g pearls" />
+                <textarea value={(generatedDraft.evidence || []).join("\n")} onChange={(event) => updateDraft({ evidence: asTypedLines(event.target.value) })} placeholder="00:42 · Worker adds 60 g pearls" />
               </label>
               <label>
                 <span>Confidence (one per step)</span>
-                <textarea value={(generatedDraft.confidence || []).join("\n")} onChange={(event) => updateDraft({ confidence: asList(event.target.value) })} placeholder="high&#10;medium&#10;low" />
+                <textarea value={(generatedDraft.confidence || []).join("\n")} onChange={(event) => updateDraft({ confidence: asTypedLines(event.target.value) })} placeholder="high&#10;medium&#10;low" />
               </label>
             </div>
             {reviewError && <p className="review-error" role="alert">{reviewError}</p>}
@@ -2919,9 +2926,7 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
             <p>
               Print and place this code at the station. Scanning it opens this exact published playbook on a second device.
             </p>
-            {selectedRecipe === "generated" && !activePlaybookRecord?.shareUrl ? (
-              <div className="qr-loading">Creating a shareable snapshot for other devices…</div>
-            ) : qrDataUrl ? (
+            {qrDataUrl ? (
               <img
                 className="qr-image"
                 src={qrDataUrl}
@@ -2930,9 +2935,23 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
             ) : (
               <div className="qr-loading">Generating secure QR…</div>
             )}
-            <button className="primary qr-print" onClick={() => window.print()}>
-              Print workstation card
-            </button>
+            <div className="qr-actions">
+              <button
+                className="secondary"
+                disabled={!qrLinkUrl}
+                onClick={() => {
+                  if (!qrLinkUrl) return;
+                  void navigator.clipboard.writeText(qrLinkUrl)
+                    .then(() => setQrCopied(true))
+                    .catch(() => setQrCopied(false));
+                }}
+              >
+                {qrCopied ? "Link copied" : "Copy link"}
+              </button>
+              <button className="primary qr-print" onClick={() => window.print()}>
+                Print workstation card
+              </button>
+            </div>
           </section>
         </div>
       )}
