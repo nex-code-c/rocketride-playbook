@@ -1574,12 +1574,21 @@ body,
 /* The workstation code is shared as often as it is printed. */
 .qr-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 16px;
 }
+/* .primary and .secondary are a fixed 39px tall, so a label that wraps gets
+   clipped. Let these grow, and drop to one per row before they get so narrow
+   that they have to wrap at all. */
 .qr-actions > button {
-  flex: 1;
+  flex: 1 1 150px;
+  height: auto;
+  min-height: 42px;
+  padding: 10px 14px;
   justify-content: center;
+  text-align: center;
+  line-height: 1.25;
 }
 .qr-actions > button:disabled { cursor: not-allowed; opacity: .5; }
 
