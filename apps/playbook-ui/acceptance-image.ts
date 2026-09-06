@@ -17,8 +17,12 @@ async function main() {
   const image = await readFile(imagePath);
   const client = new RocketRideClient({ requestTimeout: 180_000 });
   await client.connect();
+  // A failed assertion used to skip terminate(), which left the task running
+  // and made the next run fail with "Pipeline is already running" instead of
+  // the real problem. Terminate on every exit path.
+  let token: string | undefined;
   try {
-    const { token } = await client.use({ pipeline, source: "webhook_1", ttl: 300, pipelineTraceLevel: "summary", name: "Playbook acceptance · handwritten instructions" });
+    ({ token } = await client.use({ pipeline, source: "webhook_1", ttl: 300, pipelineTraceLevel: "summary", name: "Playbook acceptance · handwritten instructions" }));
     const result = await client.send(token, new Uint8Array(image), { name: "handwritten-jasmine-batch.png", source_type: "written_instructions" }, "image/png");
     const serialized = JSON.stringify(result);
     const required = ["JASMINE", "40", "195", "8", "300", "41", "4", "milk"];
@@ -26,8 +30,8 @@ async function main() {
     if (missing.length) throw new Error(`Pipeline result missed required facts: ${missing.join(", ")}\n${serialized}`);
     console.log("Handwritten-image pipeline acceptance passed.");
     console.log(serialized);
-    await client.terminate(token).catch(() => undefined);
   } finally {
+    if (token) await client.terminate(token).catch(() => undefined);
     await client.disconnect();
   }
 }

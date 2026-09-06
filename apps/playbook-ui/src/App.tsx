@@ -477,9 +477,36 @@ const asText = (item: unknown): string => {
 const asTypedLines = (value: string): string[] =>
   value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 
+// Read a key the model wrote as a field name — "cane_sugar", "steepTimeMinutes"
+// — back as the words a worker would read. Keys that only wrap the value carry
+// no meaning on a training card, so they drop away.
+const GENERIC_KEYS = new Set(["note", "notes", "description", "detail", "details", "text", "value", "item"]);
+
+const asLabel = (key: string): string =>
+  GENERIC_KEYS.has(key.toLocaleLowerCase())
+    ? ""
+    : key
+        .replace(/[_-]+/g, " ")
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .trim();
+
 const asList = (value: unknown): string[] => {
   if (Array.isArray(value)) {
     return value.map(asText).filter(Boolean);
+  }
+  // A column comes back as a list on one run and as a keyed object on the next
+  // — {"cane_sugar": "300 g"} instead of [{name, amount}]. Both say the same
+  // thing, and dropping the second shape silently emptied the ingredients.
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, field]) => {
+        const detail = asText(field);
+        const label = asLabel(key);
+        if (!label) return detail;
+        if (!detail || detail === label) return label;
+        return `${label} — ${detail}`;
+      })
+      .filter(Boolean);
   }
   if (typeof value !== "string" || !value.trim()) return [];
   try {
@@ -489,30 +516,56 @@ const asList = (value: unknown): string[] => {
   }
 };
 
-const findRecordWithRecipeFields = (value: unknown): Record<string, unknown> | null => {
-  if (typeof value === "string") {
-    try {
-      return findRecordWithRecipeFields(JSON.parse(value));
-    } catch {
-      return null;
+// Every column the extractions can return. One extraction now owns evidence
+// alone, so a record holding only that column still has to be recognized.
+const RECIPE_KEYS = [
+  "playbook_title",
+  "station",
+  "steps_json",
+  "evidence_json",
+  "ingredients_json",
+  "timers_json",
+  "safety_checks_json",
+  "quality_cues_json",
+  "confidence_json",
+];
+
+// Groq's free tier rejects any single request whose expected output tops 1000
+// tokens, and one nine-column extraction asked for ~1250 on a longer clip. The
+// pipelines now run two smaller extractions into one response node, so a result
+// carries a record per node and the draft is their union — collect every
+// matching record instead of returning the first one found.
+const collectRecipeRecord = (value: unknown): Record<string, unknown> => {
+  const merged: Record<string, unknown> = {};
+  const walk = (node: unknown): void => {
+    if (typeof node === "string") {
+      try {
+        walk(JSON.parse(node));
+      } catch {
+        // A plain string that is not JSON holds no fields to collect.
+      }
+      return;
     }
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findRecordWithRecipeFields(item);
-      if (found) return found;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
     }
-    return null;
-  }
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
-  const keys = Object.keys(record);
-  if (keys.some((key) => ["playbook_title", "steps_json", "ingredients_json", "safety_checks_json"].includes(key))) return record;
-  for (const item of Object.values(record)) {
-    const found = findRecordWithRecipeFields(item);
-    if (found) return found;
-  }
-  return null;
+    if (!node || typeof node !== "object") return;
+    const record = node as Record<string, unknown>;
+    if (Object.keys(record).some((key) => RECIPE_KEYS.includes(key))) {
+      // Both halves name the columns they own, so they cannot disagree; keep
+      // the first non-empty value anyway rather than letting a later empty
+      // field blank out one that arrived filled.
+      for (const [key, field] of Object.entries(record)) {
+        const existing = merged[key];
+        if (existing === undefined || existing === null || existing === "") merged[key] = field;
+      }
+      return;
+    }
+    for (const item of Object.values(record)) walk(item);
+  };
+  walk(value);
+  return merged;
 };
 
 // A RocketRide run can resolve with an error payload instead of rejecting —
@@ -559,7 +612,7 @@ const pipelineErrorMessage = (result: unknown): string => {
 };
 
 const normalizeDraft = (result: unknown, sourceFile: string): GeneratedDraft => {
-  const record = findRecordWithRecipeFields(result) ?? {};
+  const record = collectRecipeRecord(result);
   const ingredients = asList(record.ingredients_json ?? record.ingredients);
   const steps = asList(record.steps_json ?? record.steps);
   const timers = asList(record.timers_json ?? record.timers);
