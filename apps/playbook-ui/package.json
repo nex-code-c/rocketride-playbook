@@ -23,6 +23,7 @@
     "build": "tsc --noEmit && rsbuild build",
     "typecheck": "tsc --noEmit",
     "check:setup": "tsx check.ts",
+    "deploy:staging": "tsx deploy.ts",
     "release:staging": "tsx release.ts",
     "submit:review": "tsx submit-review.ts",
     "acceptance:video": "tsx acceptance-video.ts",
