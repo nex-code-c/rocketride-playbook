@@ -481,6 +481,39 @@ const withUnit = (amount: string, unit: string): string => {
   return mentionsUnit(amount, unit) ? amount : `${amount} ${unit}`;
 };
 
+// A model that cannot fit the unit in the value puts it in the key instead —
+// {step: "Whisk", duration_seconds: 90} — and reading only the value fields
+// dropped the number entirely, so a timer arrived as a bare verb. Take the
+// unit off the end of the key.
+const KEYED_UNITS: Record<string, string> = {
+  sec: "seconds", secs: "seconds", second: "seconds", seconds: "seconds",
+  min: "minutes", mins: "minutes", minute: "minutes", minutes: "minutes",
+  hr: "hours", hrs: "hours", hour: "hours", hours: "hours",
+  g: "g", gram: "g", grams: "g", kg: "kg", mg: "mg",
+  ml: "ml", l: "L", litre: "L", liter: "L", litres: "L", liters: "L",
+  oz: "oz", lb: "lb", lbs: "lb",
+};
+
+// 14400 seconds is four hours, and nobody works from that. Step the unit up
+// while it still divides evenly.
+const TIME_STEPS: Array<{ from: string; per: number; to: string }> = [
+  { from: "seconds", per: 3600, to: "hours" },
+  { from: "seconds", per: 60, to: "minutes" },
+  { from: "minutes", per: 60, to: "hours" },
+];
+
+const keyedMeasure = (record: Record<string, unknown>): string => {
+  for (const [key, field] of Object.entries(record)) {
+    const unit = KEYED_UNITS[key.toLocaleLowerCase().split(/[_-]/).pop() ?? ""];
+    const value = asMeasure(field);
+    if (!unit || !value) continue;
+    const count = Number(value);
+    const step = TIME_STEPS.find((entry) => entry.from === unit && Number.isFinite(count) && count >= entry.per && count % entry.per === 0);
+    return step ? `${count / step.per} ${step.to}` : `${value} ${unit}`;
+  }
+  return "";
+};
+
 // The model often returns structured entries — {item, amount} for an
 // ingredient, {action, duration} for a timer. Read them back as the line a
 // worker would read, never as raw JSON.
@@ -497,7 +530,7 @@ const asText = (item: unknown): string => {
   const amount = [record.amount, record.quantity, record.duration, record.time, record.value]
     .map(asMeasure)
     .find((field) => field.length > 0) ?? "";
-  const detail = withUnit(amount, asMeasure(record.unit ?? record.units));
+  const detail = withUnit(amount, asMeasure(record.unit ?? record.units)) || keyedMeasure(record);
   if (label && detail) return `${label.trim()} — ${detail}`;
   if (label) return label.trim();
   const parts = Object.values(record).filter((field): field is string => typeof field === "string" && field.trim().length > 0);
