@@ -504,8 +504,16 @@ const asText = (item: unknown): string => {
   return parts.join(" — ");
 };
 
-const asTypedLines = (value: string): string[] =>
-  value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+// The review textareas are controlled off `lines.join("\n")`, so this has to be
+// a lossless inverse of that join. Trimming here made it lossy: React re-rendered
+// the stripped value on the next keystroke, so a trailing space disappeared as
+// it was typed and Enter could never open a new line. Keep what the owner typed
+// and tidy at the save boundary instead — see tidyDraftLines.
+const asTypedLines = (value: string): string[] => value.split(/\r?\n/);
+
+// What actually gets stored: no surrounding whitespace, no blank rows.
+const tidyLines = (lines: string[] | undefined): string[] =>
+  (lines ?? []).map((line) => line.trim()).filter(Boolean);
 
 // Read a key the model wrote as a field name — "cane_sugar", "steepTimeMinutes"
 // — back as the words a worker would read. Keys that only wrap the value carry
@@ -1769,22 +1777,35 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
   };
   const saveDraft = (publish = false) => {
     if (!generatedDraft) return;
-    const kind = generatedDraft.kind || inferPlaybookKind(generatedDraft.title, generatedDraft.station);
+    // Editing keeps every keystroke, blank rows included, so validate and store
+    // the tidied draft rather than what is mid-edit in the textareas — three
+    // empty lines are not three steps.
+    const tidied: GeneratedDraft = {
+      ...generatedDraft,
+      ingredients: tidyLines(generatedDraft.ingredients),
+      steps: tidyLines(generatedDraft.steps),
+      timers: tidyLines(generatedDraft.timers),
+      safetyChecks: tidyLines(generatedDraft.safetyChecks),
+      qualityCues: tidyLines(generatedDraft.qualityCues),
+      evidence: generatedDraft.evidence ? tidyLines(generatedDraft.evidence) : generatedDraft.evidence,
+      confidence: generatedDraft.confidence ? tidyLines(generatedDraft.confidence) : generatedDraft.confidence,
+    };
+    const kind = tidied.kind || inferPlaybookKind(tidied.title, tidied.station);
     const missing = [
-      !generatedDraft.title.trim() && "a title",
-      !generatedDraft.station.trim() && "a station",
-      (kind === "recipe" || kind === "batch") && generatedDraft.ingredients.length === 0 && "ingredient amounts",
-      (kind === "opening" || kind === "closing" || kind === "cleaning" || kind === "task") && !generatedDraft.assignee?.trim() && "a responsible role",
-      !generatedDraft.frequency?.trim() && "a frequency or due window",
-      generatedDraft.steps.length === 0 && "at least one step",
-      generatedDraft.safetyChecks.length === 0 && "at least one safety check",
-      publish && generatedDraft.warnings.length > 0 && !warningsAcknowledged && "confirmation of every review warning",
+      !tidied.title.trim() && "a title",
+      !tidied.station.trim() && "a station",
+      (kind === "recipe" || kind === "batch") && tidied.ingredients.length === 0 && "ingredient amounts",
+      (kind === "opening" || kind === "closing" || kind === "cleaning" || kind === "task") && !tidied.assignee?.trim() && "a responsible role",
+      !tidied.frequency?.trim() && "a frequency or due window",
+      tidied.steps.length === 0 && "at least one step",
+      tidied.safetyChecks.length === 0 && "at least one safety check",
+      publish && tidied.warnings.length > 0 && !warningsAcknowledged && "confirmation of every review warning",
     ].filter(Boolean);
     if (publish && missing.length) {
       setReviewError(`Add ${missing.join(", ")} before publishing.`);
       return;
     }
-    const saved = { ...generatedDraft, warnings: publish ? [] : generatedDraft.warnings };
+    const saved = { ...tidied, warnings: publish ? [] : tidied.warnings };
     setGeneratedDraft(saved);
     localStorage.setItem("playbook-latest-draft", JSON.stringify(saved));
     localStorage.setItem("playbook-latest-draft-status", publish ? "published" : "draft");
@@ -2559,10 +2580,10 @@ const App: React.FC<ShellAppProps> = ({ isConnected, identity }) => {
               {completionSaved ? "Completion recorded" : "Complete playbook"}
             </button>
           </section>
-          <section><h3>{currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "Tools & ingredients" : "Required supplies & equipment"}</h3>{generatedDraft.ingredients.map((item) => <div className="ingredient" key={item}><i /><span>{currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? scaleMeasuredText(item) : item}</span></div>)}</section>
+          <section><h3>{currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? "Tools & ingredients" : "Required supplies & equipment"}</h3>{tidyLines(generatedDraft.ingredients).map((item, index) => <div className="ingredient" key={`${index}-${item}`}><i /><span>{currentPlaybookKind === "recipe" || currentPlaybookKind === "batch" ? scaleMeasuredText(item) : item}</span></div>)}</section>
           {stepTimers.unmatched.length > 0 && <section><h3>Timers</h3>{stepTimers.unmatched.map((item) => <p className="safety-line" key={item}><Icon name="clock" size={13} /> {item}</p>)}</section>}
-          <section><h3>Safety checks</h3>{generatedDraft.safetyChecks.map((item) => <p className="safety-line" key={item}>✓ {item}</p>)}</section>
-          {generatedDraft.qualityCues.length > 0 && <section className="tip"><Icon name="spark" /><span><b>Quality checkpoint</b><p>{generatedDraft.qualityCues.join(" · ")}</p></span></section>}
+          <section><h3>Safety checks</h3>{tidyLines(generatedDraft.safetyChecks).map((item, index) => <p className="safety-line" key={`${index}-${item}`}>✓ {item}</p>)}</section>
+          {tidyLines(generatedDraft.qualityCues).length > 0 && <section className="tip"><Icon name="spark" /><span><b>Quality checkpoint</b><p>{tidyLines(generatedDraft.qualityCues).join(" · ")}</p></span></section>}
         </aside>
       </div>
     </main>
