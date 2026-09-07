@@ -214,13 +214,16 @@ type GeneratedDraft = {
   createdAt: string;
 };
 
-const inferPlaybookKind = (title: string, station = ""): NonNullable<GeneratedDraft["kind"]> => {
+const inferPlaybookKind = (title: string, station = "", hasMeasuredIngredients = false): NonNullable<GeneratedDraft["kind"]> => {
   const value = `${title} ${station}`.toLocaleLowerCase();
   if (/open|opening|setup/.test(value)) return "opening";
   if (/close|closing|shutdown/.test(value)) return "closing";
   if (/clean|sanitize|wash/.test(value)) return "cleaning";
   if (/batch|prep|cook/.test(value)) return "batch";
-  if (/recipe|tea|pizza|taco|sandwich|drink|bowl|salad/.test(value)) return "recipe";
+  if (/recipe|tea|pizza|taco|sandwich|toast|burger|wrap|soup|sauce|dressing|drink|bowl|salad/.test(value)) return "recipe";
+  // A card with a measured ingredient list is a recipe whatever it is called.
+  // "Avocado Toast" matched no keyword and came back badged as a generic task.
+  if (hasMeasuredIngredients) return "recipe";
   return "task";
 };
 
@@ -456,19 +459,46 @@ const VIDEO_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 
+// A measurement often arrives as a number with its unit in a sibling field —
+// {item: "flour", amount: 300, unit: "g"}. Reading only string fields dropped
+// the number and the unit both, so a recipe notecard came back as bare
+// ingredient names and a timer as a bare verb. An amount may be numeric; a
+// label may not, because a numeric "step" is the step index, not its text.
+const asMeasure = (field: unknown): string =>
+  typeof field === "string" ? field.trim() : typeof field === "number" && Number.isFinite(field) ? String(field) : "";
+
+// "300" and "g" are one measurement, but the model sometimes writes the unit
+// into the amount as well — never repeat it.
+const mentionsUnit = (amount: string, unit: string): boolean => {
+  const haystack = amount.toLocaleLowerCase();
+  const needle = unit.toLocaleLowerCase();
+  return haystack === needle || haystack.endsWith(` ${needle}`) || haystack.includes(`${needle} `);
+};
+
+const withUnit = (amount: string, unit: string): string => {
+  if (!unit) return amount;
+  if (!amount) return unit;
+  return mentionsUnit(amount, unit) ? amount : `${amount} ${unit}`;
+};
+
 // The model often returns structured entries — {item, amount} for an
 // ingredient, {action, duration} for a timer. Read them back as the line a
 // worker would read, never as raw JSON.
 const asText = (item: unknown): string => {
   if (typeof item === "string") return item.trim();
+  // Reached only for an array nested inside another entry; asList handles the
+  // top-level case. Join with semicolons so the elements stay separable.
+  if (Array.isArray(item)) return item.map(asText).filter(Boolean).join("; ");
   if (item === null || item === undefined) return "";
   if (typeof item !== "object") return String(item);
   const record = item as Record<string, unknown>;
   const label = [record.item, record.ingredient, record.name, record.step, record.action, record.check, record.cue]
     .find((field): field is string => typeof field === "string" && field.trim().length > 0);
-  const detail = [record.amount, record.quantity, record.duration, record.time, record.value]
-    .find((field): field is string => typeof field === "string" && field.trim().length > 0);
-  if (label && detail) return `${label.trim()} — ${detail.trim()}`;
+  const amount = [record.amount, record.quantity, record.duration, record.time, record.value]
+    .map(asMeasure)
+    .find((field) => field.length > 0) ?? "";
+  const detail = withUnit(amount, asMeasure(record.unit ?? record.units));
+  if (label && detail) return `${label.trim()} — ${detail}`;
   if (label) return label.trim();
   const parts = Object.values(record).filter((field): field is string => typeof field === "string" && field.trim().length > 0);
   return parts.join(" — ");
@@ -499,9 +529,17 @@ const asList = (value: unknown): string[] => {
   // thing, and dropping the second shape silently emptied the ingredients.
   if (value && typeof value === "object") {
     return Object.entries(value as Record<string, unknown>)
-      .map(([key, field]) => {
-        const detail = asText(field);
+      .flatMap(([key, field]) => {
         const label = asLabel(key);
+        // A nested array is a list in its own right — {directions: [...]} used
+        // to collapse into one run-on line joined with dashes, which is how a
+        // recipe card's whole method arrived as a single unreadable evidence
+        // entry. Give every element its own line, under the key that named it.
+        if (Array.isArray(field)) {
+          const lines = asList(field);
+          return label ? lines.map((line) => `${label} — ${line}`) : lines;
+        }
+        const detail = asText(field);
         if (!label) return detail;
         if (!detail || detail === label) return label;
         return `${label} — ${detail}`;
@@ -628,11 +666,12 @@ const normalizeDraft = (result: unknown, sourceFile: string): GeneratedDraft => 
     evidence.length === 0 && steps.length > 0 && "No timestamp or transcript evidence was returned. Confirm each step against the source.",
     confidence.some((item) => /low|guess|infer|missing/i.test(item)) && "At least one step was inferred with low confidence. Verify those measurements before publishing.",
   ].filter((warning): warning is string => Boolean(warning))
-    .concat(lowConfidenceWarning(record.confidence_json ?? record.confidence));
+    .concat(lowConfidenceWarning(record.confidence_json ?? record.confidence))
+    .concat(measurementWarnings(record.ingredients_json ?? record.ingredients));
   const title = typeof record.playbook_title === "string" && record.playbook_title.trim() ? record.playbook_title.trim() : sourceFile.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ");
   const station = typeof record.station === "string" && record.station.trim() ? record.station.trim() : "Unassigned station";
   return {
-    kind: inferPlaybookKind(title, station),
+    kind: inferPlaybookKind(title, station, ingredients.length > 0),
     assignee: "Assigned team member",
     frequency: "As scheduled",
     title,
@@ -888,6 +927,51 @@ const lowConfidenceWarning = (value: unknown): string[] => {
     .map(([field]) => label(field));
   if (!weak.length) return [];
   return [`RocketRide was less certain about ${weak.join(", ")}. Check these against the source before publishing.`];
+};
+
+// Units that mean nothing on their own. "2 tsp cinnamon" has come back from the
+// extraction as {item: "cinnamon", quantity: "tsp"} with the amount silently
+// gone, while "a pinch of salt" is complete exactly as written — so only a bare
+// measuring unit counts as a missing amount, never a quantity word.
+const MEASURING_UNITS = new Set([
+  "g", "kg", "mg", "ml", "l", "cl", "dl",
+  "tsp", "tsps", "tbs", "tbsp", "tbsps", "teaspoon", "teaspoons", "tablespoon", "tablespoons",
+  "cup", "cups", "oz", "fl oz", "lb", "lbs", "pound", "pounds",
+  "quart", "quarts", "pint", "pints", "gallon", "gallons",
+  "slice", "slices", "piece", "pieces", "leaf", "leaves", "clove", "cloves",
+]);
+
+// An owner who publishes "cinnamon — tsp" ships a playbook nobody can follow,
+// and the emptiness checks never see it because the line is right there. Read
+// the raw entries rather than the rendered lines, so a dropped amount and a
+// dropped name stay distinguishable.
+const measurementWarnings = (value: unknown): string[] => {
+  const entries = Array.isArray(value)
+    ? value
+    : value && typeof value === "object"
+      ? Object.values(value as Record<string, unknown>)
+      : [];
+  const missingAmount: string[] = [];
+  const missingName: string[] = [];
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    const name = asMeasure(record.item ?? record.ingredient ?? record.name);
+    const quantity = asMeasure(record.quantity ?? record.amount ?? record.measure);
+    if (!name) {
+      if (quantity) missingName.push(quantity);
+      continue;
+    }
+    if (!quantity || MEASURING_UNITS.has(quantity.toLocaleLowerCase())) missingAmount.push(name);
+  }
+  const warnings: string[] = [];
+  if (missingAmount.length) {
+    warnings.push(`No amount was read for ${missingAmount.join(", ")}. Check ${missingAmount.length === 1 ? "it" : "them"} against the original before publishing.`);
+  }
+  if (missingName.length) {
+    warnings.push(`${missingName.join(", ")} arrived without an ingredient name — one line was probably split in two. Confirm it against the original.`);
+  }
+  return warnings;
 };
 
 const scaleMeasurements = (text: string, servings: number) => {
